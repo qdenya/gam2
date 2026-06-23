@@ -60,17 +60,17 @@
       };
 
       /**
-       * Accelerometer state
+       * Tilt state
        */
       let accelX = 0;
       let accelY = 0;
       let accelZ = 0;
 
       let steeringAngle = 0;
-      let smoothRoll = 0;
-      let baseRoll = null;
+      let smoothTilt = 0;
+      let baseTilt = null;
 
-      let tiltDebugText = "Accelerometer not started";
+      let tiltDebugText = "Tilt sensor not started";
 
       function createPlatform(y) {
         return {
@@ -142,36 +142,22 @@
         return Math.max(min, Math.min(max, value));
       }
 
-      function updateSteeringFromAccelerometer() {
-        /**
-         * roll — наклон телефона влево/вправо.
-         *
-         * x — боковой наклон.
-         * z — положение относительно гравитации.
-         *
-         * atan2 даёт угол, а не просто сырое ускорение.
-         */
-        const roll = Math.atan2(accelX, accelZ);
-
-        if (baseRoll === null) {
-          baseRoll = roll;
+      function updateSteeringFromTilt(rawTilt) {
+        if (baseTilt === null) {
+          baseTilt = rawTilt;
         }
 
-        let relativeRoll = roll - baseRoll;
-        relativeRoll = normalizeAngle(relativeRoll);
+        let relativeTilt = normalizeAngle(rawTilt - baseTilt);
 
         /**
-         * Сглаживание.
-         * 0.8 / 0.2 — хороший старт.
-         * Если управление слишком ватное — сделай 0.7 / 0.3.
-         * Если слишком дёргается — сделай 0.9 / 0.1.
+         * Небольшое сглаживание, чтобы убрать дрожание, но не делать отклик вялым.
          */
-        smoothRoll = smoothRoll * 0.8 + relativeRoll * 0.2;
+        smoothTilt = smoothTilt * 0.55 + relativeTilt * 0.45;
 
         /**
-         * Ограничиваем угол, чтобы персонаж не улетал слишком резко.
+         * Сразу учитываем сторону наклона.
          */
-       steeringAngle = clamp(-smoothRoll, -0.45, 0.45);
+        steeringAngle = clamp(-smoothTilt, -0.6, 0.6);
 
         tiltDebugText =
           "x: " +
@@ -188,11 +174,10 @@
         const keyboardSpeed = 5;
 
         /**
-         * Для Accelerometer чувствительность должна быть намного меньше,
-         * чем была для DeviceOrientation alpha.
+         * Для tilt-сенсора чувствительность должна быть умеренной.
          */
-        const steeringDeadZone = 0.035;
-        const steeringSensitivity = 18;
+        const steeringDeadZone = 0.02;
+        const steeringSensitivity = 12;
 
         if (keys.left) {
           player.speedX = -keyboardSpeed;
@@ -331,16 +316,16 @@
         score = 0;
         gameOver = false;
 
-        baseRoll = null;
-        smoothRoll = 0;
+        baseTilt = null;
+        smoothTilt = 0;
         steeringAngle = 0;
 
         createPlatforms();
       }
 
       function recalibrateSteering() {
-        baseRoll = null;
-        smoothRoll = 0;
+        baseTilt = null;
+        smoothTilt = 0;
         steeringAngle = 0;
       }
 
@@ -404,22 +389,42 @@
       tg.ready();
       tg.expand();
 
-      if (tg.Accelerometer) {
-        tg.Accelerometer.start(
+      if (tg.DeviceOrientation) {
+        tg.DeviceOrientation.start(
           {
-            /**
-             * Чем меньше число, тем чаще обновление.
-             * 50 — нормальный вариант.
-             * Если будет лагать, попробуй 80 или 100.
-             */
-            refresh_rate: 100,
+            refresh_rate: 50,
+            need_absolute: false,
           },
+          function (started) {
+            if (!started) {
+              console.warn("Device orientation tracking failed to start");
+              tiltDebugText = "Device orientation failed to start";
+            } else {
+              tiltDebugText = "Device orientation started";
+            }
+          },
+        );
+
+        tg.onEvent("deviceOrientationChanged", function () {
+          accelX = tg.DeviceOrientation.beta || 0;
+          accelY = tg.DeviceOrientation.alpha || 0;
+          accelZ = tg.DeviceOrientation.gamma || 0;
+
+          updateSteeringFromTilt(tg.DeviceOrientation.gamma || 0);
+        });
+
+        tg.onEvent("deviceOrientationFailed", function (error) {
+          console.warn("Device orientation is not supported", error);
+          tiltDebugText = "Device orientation is not supported";
+        });
+      } else if (tg.Accelerometer) {
+        tg.Accelerometer.start(
+          { refresh_rate: 50 },
           function (started) {
             if (!started) {
               console.warn("Accelerometer tracking failed to start");
               tiltDebugText = "Accelerometer failed to start";
             } else {
-              console.log("Accelerometer tracking started");
               tiltDebugText = "Accelerometer started";
             }
           },
@@ -430,13 +435,19 @@
           accelY = tg.Accelerometer.y || 0;
           accelZ = tg.Accelerometer.z || 0;
 
-          updateSteeringFromAccelerometer();
-
           /**
-           * Важно:
-           * Не делай тут console.log().
-           * Это событие вызывается много раз в секунду.
+           * Fallback: use side acceleration as a rough direction signal.
            */
+          steeringAngle = clamp(accelX * 0.08, -0.6, 0.6);
+          tiltDebugText =
+            "x: " +
+            accelX.toFixed(2) +
+            " y: " +
+            accelY.toFixed(2) +
+            " z: " +
+            accelZ.toFixed(2) +
+            " steering: " +
+            steeringAngle.toFixed(3);
         });
 
         tg.onEvent("accelerometerFailed", function (error) {
@@ -444,8 +455,8 @@
           tiltDebugText = "Accelerometer is not supported";
         });
       } else {
-        console.warn("Accelerometer API is not available");
-        tiltDebugText = "Accelerometer API is not available";
+        console.warn("Tilt sensor API is not available");
+        tiltDebugText = "Tilt sensor API is not available";
       }
 
       createPlatforms();
