@@ -81,12 +81,20 @@
       }
 
       function updatePlayer() {
+        const keyboardSpeed = 5;
+        const tiltSensitivity = 0.35;
+        const deadZone = 3;
+
         if (keys.left) {
-          player.speedX = -5;
+          player.speedX = -keyboardSpeed;
         } else if (keys.right) {
-          player.speedX = 5;
+          player.speedX = keyboardSpeed;
         } else {
-          player.speedX = 0;
+          if (Math.abs(tiltX) > deadZone) {
+            player.speedX = tiltX * tiltSensitivity;
+          } else {
+            player.speedX = 0;
+          }
         }
 
         player.x += player.speedX;
@@ -210,27 +218,36 @@
         }
       });
 
-      window.Telegram.WebApp.Gyroscope.start(
-        { refresh_rate: 100 },
-        (started) => {
-          if (!started) {
-            console.warn("Gyroscope tracking failed to start");
-          }
-        },
-      );
+      const tg = window.Telegram.WebApp;
 
-      window.Telegram.WebApp.onEvent("gyroscopeChanged", function () {
-        if (this.y < -0.2) {
-          keys.left = true;
-          keys.right = false;
-        } else if (this.y > 0.2) {
-          keys.right = true;
-          keys.left = false;
-        } else {
-          keys.left = false;
-          keys.right = false;
-        }
-      });
+      tg.ready();
+      tg.expand();
+
+      let tiltX = 0;
+
+      if (tg.DeviceOrientation) {
+        tg.DeviceOrientation.start(
+          {
+            refresh_rate: 50,
+            need_absolute: false,
+          },
+          function (started) {
+            if (!started) {
+              console.warn("Device orientation tracking failed to start");
+            }
+          },
+        );
+
+        tg.onEvent("deviceOrientationChanged", function () {
+          tiltX = tg.DeviceOrientation.gamma || 0;
+        });
+
+        tg.onEvent("deviceOrientationFailed", function (error) {
+          console.warn("Device orientation is not supported", error);
+        });
+      } else {
+        console.warn("DeviceOrientation API is not available");
+      }
 
       createPlatforms();
       gameLoop();
