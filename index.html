@@ -37,6 +37,10 @@
         right: false,
       };
 
+      let steeringAngle = 0;
+      let baseAlpha = null;
+      let tiltDebugText = "";
+
       function createPlatform(y) {
         const platform = {
           x: Math.random() * (WIDTH - 80),
@@ -80,13 +84,42 @@
         ctx.fillRect(player.x + 12, player.y + 28, 16, 4);
       }
 
+      function normalizeAngle(angle) {
+        while (angle > Math.PI) {
+          angle -= Math.PI * 2;
+        }
+
+        while (angle < -Math.PI) {
+          angle += Math.PI * 2;
+        }
+
+        return angle;
+      }
+
       function updatePlayer() {
+        const keyboardSpeed = 5;
+
+        const steeringDeadZone = 0.04;
+        const steeringSensitivity = 120;
+
         if (keys.left) {
-          player.speedX = -5;
+          player.speedX = -keyboardSpeed;
         } else if (keys.right) {
-          player.speedX = 5;
+          player.speedX = keyboardSpeed;
         } else {
-          player.speedX = 0;
+          if (Math.abs(steeringAngle) > steeringDeadZone) {
+            player.speedX = steeringAngle * steeringSensitivity;
+          } else {
+            player.speedX = 0;
+          }
+        }
+
+        if (player.speedX > 6) {
+          player.speedX = 6;
+        }
+
+        if (player.speedX < -6) {
+          player.speedX = -6;
         }
 
         player.x += player.speedX;
@@ -165,11 +198,19 @@
         });
       }
 
+      function drawDebugInfo() {
+        ctx.fillStyle = "#000";
+        ctx.font = "14px Arial";
+        ctx.fillText(tiltDebugText, 20, 30);
+        ctx.fillText("Space = recalibrate steering", 20, 50);
+      }
+
       function gameLoop() {
         ctx.clearRect(0, 0, WIDTH, HEIGHT);
         if (!gameOver) {
           renderPlatforms();
           drawPlayer();
+          drawDebugInfo();
           updatePlayer();
           checkPlatformCollision();
           moveCamera();
@@ -215,8 +256,6 @@
       tg.ready();
       tg.expand();
 
-      let alpha = 0;
-
       if (tg.DeviceOrientation) {
         tg.DeviceOrientation.start(
           {
@@ -226,9 +265,31 @@
           function (started) {
             if (!started) {
               console.warn("Device orientation tracking failed to start");
+            } else {
+              console.log("Device orientation tracking started");
             }
           },
         );
+
+        tg.onEvent("deviceOrientationChanged", function () {
+          const alpha = tg.DeviceOrientation.alpha || 0;
+
+          if (baseAlpha === null) {
+            baseAlpha = alpha;
+          }
+
+          steeringAngle = normalizeAngle(alpha - baseAlpha);
+
+          tiltDebugText =
+            "alpha: " +
+            alpha.toFixed(3) +
+            " base: " +
+            baseAlpha.toFixed(3) +
+            " steering: " +
+            steeringAngle.toFixed(3);
+
+          console.log(tiltDebugText);
+        });
 
         tg.onEvent("deviceOrientationFailed", function (error) {
           console.warn("Device orientation is not supported", error);
@@ -236,18 +297,6 @@
       } else {
         console.warn("DeviceOrientation API is not available");
       }
-
-      tg.onEvent("deviceOrientationChanged", function () {
-        alpha = tg.DeviceOrientation.alpha || 0;
-        if (alpha > 0) {
-          keys.left = true;
-        } else if (alpha < 0) {
-          keys.right = true;
-        } else {
-          keys.left = false;
-          keys.right = false;
-        }
-      });
 
       createPlatforms();
       gameLoop();
