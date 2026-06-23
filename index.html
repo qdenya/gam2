@@ -171,7 +171,7 @@
         /**
          * Ограничиваем угол, чтобы персонаж не улетал слишком резко.
          */
-        steeringAngle = clamp(smoothRoll, -0.45, 0.45);
+       steeringAngle = clamp(-smoothRoll, -0.45, 0.45);
 
         tiltDebugText =
           "x: " +
@@ -412,7 +412,7 @@
              * 50 — нормальный вариант.
              * Если будет лагать, попробуй 80 или 100.
              */
-            refresh_rate: 50,
+            refresh_rate: 100,
           },
           function (started) {
             if (!started) {
