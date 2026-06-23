@@ -210,11 +210,20 @@
         }
       });
 
-      window.Telegram.WebApp.Gyroscope.start((orientation) => {
-        if (orientation.gamma < -10) {
+      window.Telegram.WebApp.Gyroscope.start(
+        { refresh_rate: 100 },
+        (started) => {
+          if (!started) {
+            console.warn("Gyroscope tracking failed to start");
+          }
+        },
+      );
+
+      window.Telegram.WebApp.onEvent("gyroscopeChanged", function () {
+        if (this.y < -0.2) {
           keys.left = true;
           keys.right = false;
-        } else if (orientation.gamma > 10) {
+        } else if (this.y > 0.2) {
           keys.right = true;
           keys.left = false;
         } else {
