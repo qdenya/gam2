@@ -230,24 +230,24 @@
           },
         );
 
-        tg.onEvent("deviceOrientationChanged", function () {
-          alpha = tg.DeviceOrientation.alpha || 0;
-          if (alpha < 0) {
-            keys.left = true;
-          } else if (alpha > 0) {
-            keys.right = true;
-          } else {
-            keys.left = false;
-            keys.right = false;
-          }
-        });
-
         tg.onEvent("deviceOrientationFailed", function (error) {
           console.warn("Device orientation is not supported", error);
         });
       } else {
         console.warn("DeviceOrientation API is not available");
       }
+
+      tg.onEvent("deviceOrientationChanged", function () {
+        alpha = tg.DeviceOrientation.alpha || 0;
+        if (alpha > 0) {
+          keys.left = true;
+        } else if (alpha < 0) {
+          keys.right = true;
+        } else {
+          keys.left = false;
+          keys.right = false;
+        }
+      });
 
       createPlatforms();
       gameLoop();
