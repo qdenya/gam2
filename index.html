@@ -37,6 +37,10 @@
         right: false,
       };
 
+      let tiltX = 0;
+      let tiltY = 0;
+      let useTiltControls = true;
+
       function createPlatform(y) {
         const platform = {
           x: Math.random() * (WIDTH - 80),
@@ -82,31 +86,25 @@
 
       function updatePlayer() {
         const keyboardSpeed = 5;
-        const tiltSensitivity = 0.35;
-        const deadZone = 3;
+
+        // Для Telegram WebApp значения маленькие, поэтому порог тоже маленький
+        const tiltDeadZone = 0.03;
+
+        // Чем больше число, тем быстрее игрок двигается от наклона
+        const tiltSensitivity = 80;
 
         if (keys.left) {
           player.speedX = -keyboardSpeed;
         } else if (keys.right) {
           player.speedX = keyboardSpeed;
-        } else {
-          if (Math.abs(tiltX) > deadZone) {
+        } else if (useTiltControls) {
+          if (Math.abs(tiltX) > tiltDeadZone) {
             player.speedX = tiltX * tiltSensitivity;
           } else {
             player.speedX = 0;
           }
-        }
-
-        player.x += player.speedX;
-        player.speedY += player.gravity;
-        player.y += player.speedY;
-
-        if (player.x + player.width < 0) {
-          player.x = WIDTH;
-        }
-
-        if (player.x > WIDTH) {
-          player.x = -player.width;
+        } else {
+          player.speedX = 0;
         }
       }
 
@@ -223,8 +221,6 @@
       tg.ready();
       tg.expand();
 
-      let tiltX = 0;
-
       if (tg.DeviceOrientation) {
         tg.DeviceOrientation.start(
           {
@@ -234,16 +230,21 @@
           function (started) {
             if (!started) {
               console.warn("Device orientation tracking failed to start");
+            } else {
+              console.log("Device orientation tracking started");
             }
           },
         );
 
         tg.onEvent("deviceOrientationChanged", function () {
           tiltX = tg.DeviceOrientation.gamma || 0;
+          tiltY = tg.DeviceOrientation.beta || 0;
+
+          console.log("tiltX:", tiltX, "tiltY:", tiltY);
         });
 
         tg.onEvent("deviceOrientationFailed", function (error) {
-          console.warn("Device orientation is not supported", error);
+          console.warn("Device orientation failed", error);
         });
       } else {
         console.warn("DeviceOrientation API is not available");
