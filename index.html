@@ -3,14 +3,36 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
+    <title>Doodle Jump Telegram Mini App</title>
+
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: #111;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      canvas {
+        background: #eaf7ff;
+        display: block;
+      }
+    </style>
   </head>
+
   <body>
     <canvas id="game" width="400" height="600"></canvas>
+
     <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
+
     <script>
       const canvas = document.getElementById("game");
       const ctx = canvas.getContext("2d");
+
       const WIDTH = canvas.width;
       const HEIGHT = canvas.height;
 
@@ -37,23 +59,32 @@
         right: false,
       };
 
+      /**
+       * Accelerometer state
+       */
+      let accelX = 0;
+      let accelY = 0;
+      let accelZ = 0;
+
       let steeringAngle = 0;
-      let baseAlpha = null;
-      let tiltDebugText = "";
+      let smoothRoll = 0;
+      let baseRoll = null;
+
+      let tiltDebugText = "Accelerometer not started";
 
       function createPlatform(y) {
-        const platform = {
+        return {
           x: Math.random() * (WIDTH - 80),
           y: y,
           width: 80,
           height: 12,
+          broken: false,
         };
-
-        return platform;
       }
 
       function createPlatforms() {
         platforms = [];
+
         for (let i = 0; i < 8; i++) {
           platforms.push(createPlatform(i * 80));
         }
@@ -63,13 +94,24 @@
           y: HEIGHT - 20,
           width: 80,
           height: 12,
+          broken: false,
         });
       }
 
       function renderPlatforms() {
-        ctx.fillStyle = "green";
         platforms.forEach((platform) => {
-          ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+          if (platform.broken) {
+            ctx.fillStyle = "#8b4513";
+          } else {
+            ctx.fillStyle = "green";
+          }
+
+          ctx.fillRect(
+            platform.x,
+            platform.y,
+            platform.width,
+            platform.height,
+          );
         });
       }
 
@@ -96,11 +138,61 @@
         return angle;
       }
 
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function updateSteeringFromAccelerometer() {
+        /**
+         * roll — наклон телефона влево/вправо.
+         *
+         * x — боковой наклон.
+         * z — положение относительно гравитации.
+         *
+         * atan2 даёт угол, а не просто сырое ускорение.
+         */
+        const roll = Math.atan2(accelX, accelZ);
+
+        if (baseRoll === null) {
+          baseRoll = roll;
+        }
+
+        let relativeRoll = roll - baseRoll;
+        relativeRoll = normalizeAngle(relativeRoll);
+
+        /**
+         * Сглаживание.
+         * 0.8 / 0.2 — хороший старт.
+         * Если управление слишком ватное — сделай 0.7 / 0.3.
+         * Если слишком дёргается — сделай 0.9 / 0.1.
+         */
+        smoothRoll = smoothRoll * 0.8 + relativeRoll * 0.2;
+
+        /**
+         * Ограничиваем угол, чтобы персонаж не улетал слишком резко.
+         */
+        steeringAngle = clamp(smoothRoll, -0.45, 0.45);
+
+        tiltDebugText =
+          "x: " +
+          accelX.toFixed(2) +
+          " y: " +
+          accelY.toFixed(2) +
+          " z: " +
+          accelZ.toFixed(2) +
+          " steering: " +
+          steeringAngle.toFixed(3);
+      }
+
       function updatePlayer() {
         const keyboardSpeed = 5;
 
-        const steeringDeadZone = 0.04;
-        const steeringSensitivity = 140;
+        /**
+         * Для Accelerometer чувствительность должна быть намного меньше,
+         * чем была для DeviceOrientation alpha.
+         */
+        const steeringDeadZone = 0.035;
+        const steeringSensitivity = 18;
 
         if (keys.left) {
           player.speedX = -keyboardSpeed;
@@ -114,18 +206,16 @@
           }
         }
 
-        if (player.speedX > 6) {
-          player.speedX = 6;
-        }
-
-        if (player.speedX < -6) {
-          player.speedX = -6;
-        }
+        player.speedX = clamp(player.speedX, -6, 6);
 
         player.x += player.speedX;
+
         player.speedY += player.gravity;
         player.y += player.speedY;
 
+        /**
+         * Переход через край экрана.
+         */
         if (player.x + player.width < 0) {
           player.x = WIDTH;
         }
@@ -198,34 +288,77 @@
         });
       }
 
+      function checkGameOver() {
+        if (player.y > HEIGHT) {
+          gameOver = true;
+        }
+      }
+
       function drawDebugInfo() {
         ctx.fillStyle = "#000";
         ctx.font = "14px Arial";
+
         ctx.fillText(tiltDebugText, 20, 30);
-        ctx.fillText("Space = recalibrate steering", 20, 50);
+        ctx.fillText("Space / tap = recalibrate steering", 20, 50);
+        ctx.fillText("Score: " + score, 20, 70);
+        ctx.fillText("Best: " + bestScore, 20, 90);
+      }
+
+      function drawGameOver() {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        ctx.fillStyle = "#fff";
+        ctx.font = "32px Arial";
+        ctx.fillText("Game Over", WIDTH / 2 - 85, HEIGHT / 2 - 40);
+
+        ctx.font = "18px Arial";
+        ctx.fillText("Score: " + score, WIDTH / 2 - 40, HEIGHT / 2);
+
+        ctx.fillText(
+          "Tap to restart",
+          WIDTH / 2 - 55,
+          HEIGHT / 2 + 40,
+        );
+      }
+
+      function resetGame() {
+        player.x = WIDTH / 2 - 20;
+        player.y = HEIGHT - 100;
+        player.speedX = 0;
+        player.speedY = 0;
+
+        score = 0;
+        gameOver = false;
+
+        baseRoll = null;
+        smoothRoll = 0;
+        steeringAngle = 0;
+
+        createPlatforms();
+      }
+
+      function recalibrateSteering() {
+        baseRoll = null;
+        smoothRoll = 0;
+        steeringAngle = 0;
       }
 
       function gameLoop() {
         ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
         if (!gameOver) {
           renderPlatforms();
           drawPlayer();
           drawDebugInfo();
+
           updatePlayer();
           checkPlatformCollision();
           moveCamera();
           updatePlatforms();
-
-          //строить новые платформы
-          //обновлять счет
-          //следить за столкновениями
-          //обновлять позицию игрока
-          //удалять платформы и монстров, которые вышли за пределы экрана
+          checkGameOver();
         } else {
-          //вывести сообщение о конце игры
-          //вывести кнопку для перезапуска игры
-          //вывести счет и лучший счет
-          //остановить игровой цикл
+          drawGameOver();
         }
 
         requestAnimationFrame(gameLoop);
@@ -239,6 +372,10 @@
         if (event.code === "ArrowRight" || event.code === "KeyD") {
           keys.right = true;
         }
+
+        if (event.code === "Space") {
+          recalibrateSteering();
+        }
       });
 
       document.addEventListener("keyup", (event) => {
@@ -251,51 +388,64 @@
         }
       });
 
+      canvas.addEventListener("click", () => {
+        if (gameOver) {
+          resetGame();
+        } else {
+          recalibrateSteering();
+        }
+      });
+
+      /**
+       * Telegram Mini App setup
+       */
       const tg = window.Telegram.WebApp;
 
       tg.ready();
       tg.expand();
 
-      if (tg.DeviceOrientation) {
-        tg.DeviceOrientation.start(
+      if (tg.Accelerometer) {
+        tg.Accelerometer.start(
           {
+            /**
+             * Чем меньше число, тем чаще обновление.
+             * 50 — нормальный вариант.
+             * Если будет лагать, попробуй 80 или 100.
+             */
             refresh_rate: 50,
-            need_absolute: false,
           },
           function (started) {
             if (!started) {
-              console.warn("Device orientation tracking failed to start");
+              console.warn("Accelerometer tracking failed to start");
+              tiltDebugText = "Accelerometer failed to start";
             } else {
-              console.log("Device orientation tracking started");
+              console.log("Accelerometer tracking started");
+              tiltDebugText = "Accelerometer started";
             }
           },
         );
 
-        tg.onEvent("deviceOrientationChanged", function () {
-          const alpha = tg.DeviceOrientation.alpha || 0;
+        tg.onEvent("accelerometerChanged", function () {
+          accelX = tg.Accelerometer.x || 0;
+          accelY = tg.Accelerometer.y || 0;
+          accelZ = tg.Accelerometer.z || 0;
 
-          if (baseAlpha === null) {
-            baseAlpha = alpha;
-          }
+          updateSteeringFromAccelerometer();
 
-          steeringAngle = -normalizeAngle(alpha - baseAlpha);
-
-          tiltDebugText =
-            "alpha: " +
-            alpha.toFixed(3) +
-            " base: " +
-            baseAlpha.toFixed(3) +
-            " steering: " +
-            steeringAngle.toFixed(3);
-
-          console.log(tiltDebugText);
+          /**
+           * Важно:
+           * Не делай тут console.log().
+           * Это событие вызывается много раз в секунду.
+           */
         });
 
-        tg.onEvent("deviceOrientationFailed", function (error) {
-          console.warn("Device orientation is not supported", error);
+        tg.onEvent("accelerometerFailed", function (error) {
+          console.warn("Accelerometer is not supported", error);
+          tiltDebugText = "Accelerometer is not supported";
         });
       } else {
-        console.warn("DeviceOrientation API is not available");
+        console.warn("Accelerometer API is not available");
+        tiltDebugText = "Accelerometer API is not available";
       }
 
       createPlatforms();
