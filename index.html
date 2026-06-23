@@ -230,7 +230,7 @@
           },
         );
 
-        tg.onEvent("device_orientation_changed", function () {
+        tg.onEvent("deviceOrientationChanged", function () {
           alpha = tg.DeviceOrientation.alpha || 0;
           if (alpha < 0) {
             keys.left = true;
@@ -242,7 +242,7 @@
           }
         });
 
-        tg.onEvent("device_orientation_failed", function (error) {
+        tg.onEvent("deviceOrientationFailed", function (error) {
           console.warn("Device orientation is not supported", error);
         });
       } else {
