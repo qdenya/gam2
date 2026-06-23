@@ -100,7 +100,7 @@
         const keyboardSpeed = 5;
 
         const steeringDeadZone = 0.04;
-        const steeringSensitivity = 120;
+        const steeringSensitivity = 80;
 
         if (keys.left) {
           player.speedX = -keyboardSpeed;
@@ -278,7 +278,7 @@
             baseAlpha = alpha;
           }
 
-          steeringAngle = normalizeAngle(alpha - baseAlpha);
+          steeringAngle = -normalizeAngle(alpha - baseAlpha);
 
           tiltDebugText =
             "alpha: " +
