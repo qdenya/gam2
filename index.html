@@ -13,6 +13,7 @@
         display: flex;
         justify-content: center;
         align-items: center;
+        width: 100vw;
         height: 100vh;
         overflow: hidden;
       }
@@ -20,12 +21,14 @@
       canvas {
         background: #eaf7ff;
         display: block;
+        width: 100vw;
+        height: 100vh;
       }
     </style>
   </head>
 
   <body>
-    <canvas id="game" width="400" height="600"></canvas>
+    <canvas id="game"></canvas>
 
     <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
 
@@ -39,8 +42,17 @@
       const playerImage = new Image();
       playerImage.src = "assets/bunny2_ready.png";
 
-      const WIDTH = canvas.width;
-      const HEIGHT = canvas.height;
+      let WIDTH = 0;
+      let HEIGHT = 0;
+
+      function resizeCanvas() {
+        WIDTH = window.innerWidth;
+        HEIGHT = window.innerHeight;
+        canvas.width = WIDTH;
+        canvas.height = HEIGHT;
+      }
+
+      resizeCanvas();
 
       const player = {
         x: WIDTH / 2 - 20,
@@ -396,6 +408,13 @@
         } else {
           recalibrateSteering();
         }
+      });
+
+      window.addEventListener("resize", () => {
+        resizeCanvas();
+        createPlatforms();
+        player.x = WIDTH / 2 - player.width / 2;
+        player.y = HEIGHT - 100;
       });
 
       /**
