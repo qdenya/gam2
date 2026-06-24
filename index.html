@@ -302,7 +302,6 @@
         ctx.font = "14px Arial";
 
         ctx.fillText(tiltDebugText, 20, 30);
-        ctx.fillText("Space / tap = recalibrate steering", 20, 50);
         ctx.fillText("Score: " + score, 20, 70);
         ctx.fillText("Best: " + bestScore, 20, 90);
       }
@@ -464,7 +463,7 @@
             accelY.toFixed(2) +
             " z: " +
             accelZ.toFixed(2) +
-            " steering: " +
+            " отклонение: " +
             steeringAngle.toFixed(3);
         });
 
