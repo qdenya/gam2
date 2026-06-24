@@ -33,6 +33,12 @@
       const canvas = document.getElementById("game");
       const ctx = canvas.getContext("2d");
 
+      const platformImage = new Image();
+      platformImage.src = "assets/ground_grass.png";
+
+      const playerImage = new Image();
+      playerImage.src = "assets/bunny2_ready.png";
+
       const WIDTH = canvas.width;
       const HEIGHT = canvas.height;
 
@@ -102,11 +108,17 @@
         platforms.forEach((platform) => {
           if (platform.broken) {
             ctx.fillStyle = "#8b4513";
-          } else {
-            ctx.fillStyle = "green";
+            ctx.fillRect(
+              platform.x,
+              platform.y,
+              platform.width,
+              platform.height,
+            );
+            return;
           }
 
-          ctx.fillRect(
+          ctx.drawImage(
+            platformImage,
             platform.x,
             platform.y,
             platform.width,
@@ -116,6 +128,11 @@
       }
 
       function drawPlayer() {
+        if (playerImage.complete && playerImage.naturalWidth > 0) {
+          ctx.drawImage(playerImage, player.x - 4, player.y - 12, 48, 64);
+          return;
+        }
+
         ctx.fillStyle = "#ffdd33";
         ctx.fillRect(player.x, player.y, player.width, player.height);
 
@@ -226,6 +243,7 @@
             playerPrevBottom <= platform.y + platform.height;
 
           if (isFalling && isInsideX && landedOnPlatform && !platform.broken) {
+            player.y = platform.y - player.height;
             player.speedY = player.jumpPower;
 
             if (platform.type === "break") {
